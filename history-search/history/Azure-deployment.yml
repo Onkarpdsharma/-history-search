@@ -1,0 +1,120 @@
+trigger:
+  batch: true
+  branches:
+    include:
+      - development
+
+
+pool:
+  vmImage: ubuntu-latest
+
+
+steps:
+- task: DownloadSecureFile@1
+  name: gcpKey
+  inputs:
+    secureFile: 'gcp-project-id.json'
+  displayName: 'Download GCP key'
+
+- script: |
+    wget https://dl.google.com/dl/cloudsdk/release/google-cloud-sdk.tar.gz
+  displayName: 'Download GCP package'
+
+- script: tar zxvf google-cloud-sdk.tar.gz && ./google-cloud-sdk/install.sh --quiet --usage-reporting=false --path-update=true
+  displayName: 'Install GCP on agent'
+
+- script: |
+    gcloud auth activate-service-account  service-acccount@project-id.iam.gserviceaccount.com --key-file=$(gcpKey.secureFilePath) 
+    gcloud config set project project-id
+    
+  displayName: 'Authenticate GCP account'
+
+- script: |
+    gcloud auth configure-docker --quiet
+    gcloud auth configure-docker gcr.io --quiet
+  displayName: 'Authenticate Docker with GCP'
+
+- script: |
+    VERSIONS_JSON=$(gcloud container images list-tags artifactory-region/project-name/frontend --limit=1 --format=json)
+    echo ${VERSIONS_JSON}
+    VERSION=`python frontend/version_dev.py ${VERSIONS_JSON}`
+    echo ${VERSION}
+    echo "##vso[task.setvariable variable=version;]${VERSION}"
+  displayName: 'Get latest version in registry'
+
+- script: |
+    VERSIONS_JSON=$(gcloud container images list-tags artifactory-region/project-name/backend --limit=1 --format=json)
+    echo ${VERSIONS_JSON}
+    VERSION=`python backend/version_dev.py ${VERSIONS_JSON}`
+    echo ${VERSION}
+    echo "##vso[task.setvariable variable=version-backend;]${VERSION}"
+  displayName: 'Get latest version in registry'
+
+
+
+    
+
+- script: |
+    cd deploy/bitcon #path for terraform file to deploy
+    #!/bin/bash
+    #CONTAINERS VERSIONS
+    export GOOGLE_APPLICATION_CREDENTIALS="$(gcpKey.secureFilePath)"
+    export TF_VAR_FRONTEND_VERSION="$(version-backend)"           
+    export TF_VAR_FRONTEND_VERSION="$(version-frontend)"           
+
+   
+
+    export TF_VAR_REGISTRY_FRONTEND="artifactory-region/project-name/frontend"                       
+    export TF_VAR_REGISTRY_BACKEND="artifactory-region/project-name/backend"            
+
+
+
+    ## ENVIRONMENT
+    export TF_VAR_ENVIRONMENT="dev" # Environment development/production
+
+    ## DNS
+
+
+    ## COMPLETE DNS
+    export TF_VAR_DNS_COMPLETE="application dns name" 
+    export TF_VAR_STATIC_IP="load balancer ip"           
+    export TF_VAR_EMAIL="email id for support"    
+    export
+
+    ## KUBERNETES VARIABLES
+    export TF_VAR_REGION="region zone" # Region where kubernetes is installed
+    export TF_VAR_KUBERNETES_HOST="https://ip-address"
+    export TF_VAR_KUBERNETES_TOKEN=$(gcloud beta auth application-default print-access-token)
+    #export TF_VAR_KUBERNETES_TOKEN=pwd
+    export TF_VAR_KUBERNETES_CLIENT_KEY=""
+    export TF_VAR_KUBERNETES_CLIENT_CA_CERTIFICATES=""
+    export TF_VAR_KUBERNETES_CLUSTER_NAME="cluster-name"
+    export TF_VAR_GKE_PROJECT_ID="project-id"
+
+    terraform init
+
+    #RUN TERRAFORM FROM DOCKER
+    docker build -f ./dockerfiles/terraform/Dockerfile -t history-bitcon:latest .
+
+    docker run -e TF_VAR_FRONTEND_VERSION=$TF_VAR_FRONTEND_VERSION \
+        -e TF_VAR_FRONTEND_ADMIN_VERSION=$TF_VAR_BACKEND_VERSION \
+        -e TF_VAR_FRONTEND_SUPER_ADMIN_VERSION=$TF_VAR_FRONTEND_SUPER_ADMIN_VERSION \
+        -e TF_VAR_ENVIRONMENT=$TF_VAR_ENVIRONMENT \
+        -e TF_VAR_REGISTRY_FRONTEND=$TF_VAR_REGISTRY_FRONTEND \
+        -e TF_VAR_REGISTRY_FRONTEND_ADMIN=$TF_VAR_REGISTRY_FRONTEND_ADMIN \
+        -e TF_VAR_REGISTRY_FRONTEND_SUPER_ADMIN=$TF_VAR_REGISTRY_FRONTEND_SUPER_ADMIN \
+        -e TF_VAR_DNS_BACKEND=$TF_VAR_DNS_BACKEND \
+        -e TF_VAR_DNS_COMPLETE=$TF_VAR_DNS_COMPLETE \
+        -e TF_VAR_STATIC_IP=$TF_VAR_STATIC_IP \
+        -e TF_VAR_EMAIL=$TF_VAR_EMAIL \
+        -e TF_VAR_REGION=$TF_VAR_REGION \
+        -e TF_VAR_KUBERNETES_HOST=$TF_VAR_KUBERNETES_HOST \
+        -e TF_VAR_KUBERNETES_TOKEN=$TF_VAR_KUBERNETES_TOKEN \
+        -e TF_VAR_KUBERNETES_CLIENT_CA_CERTIFICATES=$TF_VAR_KUBERNETES_CLIENT_CA_CERTIFICATES \
+        -e TF_VAR_KUBERNETES_CLUSTER_NAME=$TF_VAR_KUBERNETES_CLUSTER_NAME \
+        -e TF_VAR_GKE_PROJECT_ID=$TF_VAR_GKE_PROJECT_ID \
+        -v $(pwd):/terraform \
+        --entrypoint "" \
+        history-bitcon:latest /bin/bash -c "terraform workspace select $TF_VAR_ENVIRONMENT || terraform workspace new $TF_VAR_ENVIRONMENT && terraform init && terraform plan -out terraform.tfstate && terraform apply -auto-approve"
+
+  displayName: 'Run terraform to build infrastructure'

@@ -1,6 +1,7 @@
 package com.bitcoin.history.controller;
 
 
+import org.springframework.hateoas.EntityModel;
 import org.springframework.web.bind.annotation.*;
 
 import com.bitcoin.history.service.BitcoinPriceService;
@@ -29,14 +30,14 @@ public class BitcoinPriceController {
    
     @Operation(summary = "Get Bitcoin Prices", description = "Fetches historical Bitcoin prices")
     @GetMapping("/price")  
-    Map<String, Object>  getBitcoinPricesOnline
+    EntityModel<Map<String, Object>>  getBitcoinPricesOnline
     (@RequestParam String start, @RequestParam String end,
      @RequestParam(defaultValue = "USD")String currency) 
     
     {
-    	 Map<String, Object> response = new HashMap<>();
+    	EntityModel<Map<String, Object>> response;
     	 logger.info("price method geting invoked");
-    	 response = service.getPricesOnline(start, end, currency);
+    	 response =  service.getPricesOnline(start, end, currency);
     	 
     	 return response;
     	

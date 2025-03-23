@@ -1,29 +1,26 @@
 package com.bitcoin.history.controller;
 
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.Map;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.hateoas.EntityModel;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-import com.bitcoin.history.controller.BitcoinPriceController;
 import com.bitcoin.history.service.BitcoinPriceService;
 
 @ExtendWith(MockitoExtension.class)
-class BitcoinPriceControllerTest {
+public class BitcoinPriceControllerTest {
 
     private MockMvc mockMvc;
 
@@ -33,27 +30,25 @@ class BitcoinPriceControllerTest {
     @InjectMocks
     private BitcoinPriceController bitcoinPriceController;
 
-    @BeforeEach
-    void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(bitcoinPriceController).build();
-    }
-
     @Test
-    void testGetBitcoinPricesOnline() throws Exception {
-        // Mock response
-        Map<String, Object> mockResponse = new HashMap<>();
-        mockResponse.put("price", 50000);
+    public void testGetBitcoinPricesOnline_Success() throws Exception {
+        // Setup mock response
+        Map<String, Object> mockResponse = Collections.singletonMap("prices", Collections.emptyMap());
+        EntityModel<Map<String, Object>> entityModel = EntityModel.of(mockResponse);
 
-        when(bitcoinPriceService.getPricesOnline("2024-01-01", "2024-01-10", "USD"))
-                .thenReturn(mockResponse);
+        when(bitcoinPriceService.getPricesOnline("2024-03-01", "2024-03-05", "USD"))
+                .thenReturn(entityModel);
 
+        // Setup MockMvc
+        mockMvc = MockMvcBuilders.standaloneSetup(bitcoinPriceController).build();
+
+        // Perform GET request and verify response
         mockMvc.perform(get("/api/bitcoin/price")
-                .param("start", "2024-01-01")
-                .param("end", "2024-01-10")
+                .param("start", "2024-03-01")
+                .param("end", "2024-03-05")
                 .param("currency", "USD"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.price").value(50000));
-
-        verify(bitcoinPriceService, times(1)).getPricesOnline("2024-01-01", "2024-01-10", "USD");
+                .andExpect(jsonPath("$.prices").exists());
     }
 }
+

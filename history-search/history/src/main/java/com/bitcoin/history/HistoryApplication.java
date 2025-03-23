@@ -5,7 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.ComponentScan;
 
 @SpringBootApplication
-@ComponentScan(basePackages = {"com.bitcoin.history.service","com.bitcoin.history.controller"})
+@ComponentScan(basePackages = {"com.bitcoin.history"})
 public class HistoryApplication {
 
 	public static void main(String[] args) {

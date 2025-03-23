@@ -16,3 +16,4 @@ public class SwaggerConfig {
                         .description("API for fetching historical Bitcoin prices"));
     }
 }
+ 
